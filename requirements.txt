@@ -1,0 +1,7 @@
+# Python deps for the VLM engine (not available as rosdep keys).
+torch>=2.1
+transformers>=4.44
+accelerate>=0.30
+einops
+pyvips  # used by moondream2 remote code for image preprocessing
+Pillow>=9.0

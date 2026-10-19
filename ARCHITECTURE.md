@@ -16,7 +16,7 @@
       Create the `watchtower_vlm` ROS 2 package (`ament_python`), setup `setup.py`, and create the basic Node class structure.
 - [x] **M2: Threaded Subscriber & Publisher**
       Implement the image subscriber (`/camera/image_raw`), the E-Stop publisher (`/watchtower/e_stop` as `std_msgs/Bool`), and the MultiThreadedExecutor with the frame-dropping Queue.
-- [ ] **M3: The VLM Inference Engine**
+- [x] **M3: The VLM Inference Engine**
       Write an isolated Python class that loads a small VLM (e.g., Moondream2, tiny parameter size) and accepts a PIL image and text prompt to return a boolean anomaly detection.
 - [ ] **M4: Node Integration**
       Connect the VLM engine to the background worker thread. Parse the VLM text output (e.g., mapping "Yes" to `True`) and publish to the E-Stop topic.
