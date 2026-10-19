@@ -1,0 +1,23 @@
+# colcon workspace
+build/
+install/
+log/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.venv/
+venv/
+
+# Models / weights
+*.gguf
+*.safetensors
+*.bin
+models/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
