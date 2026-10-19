@@ -1,0 +1,12 @@
+watchtower_vlm:
+  ros__parameters:
+    image_topic: /camera/image_raw
+    e_stop_topic: /watchtower/e_stop
+    prompt: "Is there a liquid spill, a dropped object, or a collision?"
+    confidence_threshold: 0.5
+    vote_window: 1
+    ambiguous_confidence: 0.5
+    model_path: vikhyatk/moondream2
+    model_revision: "2025-01-09"
+    device: auto
+    fail_safe: true

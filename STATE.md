@@ -1,9 +1,8 @@
 # CURRENT CONTEXT & STATE
-**Active Milestone:** M4
-**Last Completed Action:** M1 + M2 done. `src/watchtower_vlm` (ament_python) builds with `colcon build --symlink-install`.
-- `watchtower_vlm/frame_queue.py`: `LatestFrameQueue` wraps `queue.Queue(maxsize=1)`, drops stale frames (counts in `.dropped`).
-- `watchtower_vlm/watchtower_node.py`: `WatchtowerNode` subscribes to `image_topic` (default `/camera/image_raw`, sensor-data QoS, ReentrantCallbackGroup), callback only enqueues. Daemon worker thread `_inference_loop` converts via cv_bridge (rgb8), calls `_detect_anomaly(frame, prompt)` (currently a stub returning False), publishes `std_msgs/Bool` on `e_stop_topic` (default `/watchtower/e_stop`). `main()` uses `MultiThreadedExecutor`.
-- Params declared: `image_topic`, `e_stop_topic`, `prompt` (read each frame, so runtime-settable), `queue_poll_timeout_sec`.
-- Tests: `cd src/watchtower_vlm && python3 -m pytest test` (after sourcing install/setup.bash) — 2 pass. Live smoke test verified E-Stop publishes `false`.
-**Current Blockers:** No git remote configured (`git push origin main` fails until `git remote add origin <url>`). Python deps for M3 (`transformers`, `torch`, `Pillow`, moondream2 weights) not yet checked/installed.
-**Next Immediate Step:** M3 — create `watchtower_vlm/vlm_engine.py` with a `VLMEngine` class (load moondream2, `detect(pil_image, prompt) -> bool`), independent of ROS, plus a unit test using a mocked model.
+**Active Milestone:** None — M1–M5 complete.
+**Last Completed Action:** M3 (`vlm_engine.py`), M4 (engine wired into node worker), M5 (parameters, `config/watchtower.yaml`, `launch/watchtower.launch.py`, README).
+- `vlm_engine.py`: `VLMEngine(model_path, revision, device, ambiguous_confidence, model=None)`; lazy-imports torch/transformers in `load()`; `query()` supports moondream2 `.query()` API and legacy `encode_image/answer_question`; `evaluate()` -> `DetectionResult(anomaly, confidence, raw_answer)`; `detect()` -> bool. `parse_answer()` maps yes/no/ambiguous.
+- Node: worker thread loads the model on start, converts frame -> PIL, calls `evaluate`, averages confidence over `vote_window`, compares to `confidence_threshold`. With `fail_safe` on, a load or inference failure publishes E-Stop True. A parameter callback validates the threshold and window, and rejects changes to startup-only params.
+- Tests: 16 pass (queue, engine with fake model, node integration with fake engine and fail-safe). Launch smoke test verified overrides, param validation and fail-safe E-Stop.
+**Current Blockers:** `torch`/`transformers` are not installed on this machine (`pip install -r requirements.txt`). Real moondream2 inference has NOT been run yet; only mocks.
+**Next Immediate Step:** Install requirements, then run against a real camera or rosbag to validate prompt wording and latency. Optional later work: llama.cpp/GGUF backend, an inference-rate cap, and a launch_testing integration test.

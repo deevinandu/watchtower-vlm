@@ -18,7 +18,7 @@
       Implement the image subscriber (`/camera/image_raw`), the E-Stop publisher (`/watchtower/e_stop` as `std_msgs/Bool`), and the MultiThreadedExecutor with the frame-dropping Queue.
 - [x] **M3: The VLM Inference Engine**
       Write an isolated Python class that loads a small VLM (e.g., Moondream2, tiny parameter size) and accepts a PIL image and text prompt to return a boolean anomaly detection.
-- [ ] **M4: Node Integration**
+- [x] **M4: Node Integration**
       Connect the VLM engine to the background worker thread. Parse the VLM text output (e.g., mapping "Yes" to `True`) and publish to the E-Stop topic.
-- [ ] **M5: Parameters & Launch File**
+- [x] **M5: Parameters & Launch File**
       Expose the VLM prompt, confidence threshold, and model path as ROS 2 Parameters. Write a `watchtower.launch.py` file to start it.
