@@ -69,6 +69,26 @@ ros2 topic echo /watchtower_vlm/status --field data
 
 Defaults live in `config/watchtower.yaml`; pass `config:=/path/to.yaml` to replace it.
 
+## Backends
+
+| | `transformers` (default) | `llamacpp` |
+|---|---|---|
+| Weights | moondream2 `2025-01-09`, fp16 | the same revision's `moondream2-*-f16.gguf` files |
+| GPU latency, 1 prompt | ~320 ms | ~160 ms |
+| Extra prompts | ~30 ms each (image encoded once) | ~180 ms each (image re-encoded) |
+| CPU only (24 cores) | not measured | ~5 s/frame (f16, not quantized) |
+| Install | `requirements.txt` | build `llama-cpp-python` (see `requirements.txt`) |
+
+All figures are from an RTX 5070 Ti Laptop GPU.
+
+```bash
+ros2 launch watchtower_vlm watchtower.launch.py backend:=llamacpp
+```
+
+For llama.cpp, `gguf_file` and `mmproj_file` accept local paths, for example a quantized GGUF you made with `llama-quantize`. They also accept filename globs, which are resolved in `model_path` at `model_revision`; the defaults are `*text-model*` and `*mmproj*`. Set `n_gpu_layers:=0` for CPU only.
+
+The backends **do not give identical answers** on the same image. On the synthetic set, llama.cpp caught 3/6 puddles and transformers caught 1/6, with no false positives from either. Re-run `evaluate` with `--backend` before switching.
+
 ## Evaluate prompts
 
 Put labelled images in `anomaly/` and `normal/` subfolders, or list them in a CSV with `path,label` columns. Then compare prompts:

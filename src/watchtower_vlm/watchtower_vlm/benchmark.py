@@ -6,7 +6,7 @@ import time
 
 from PIL import Image, ImageDraw
 
-from watchtower_vlm.vlm_engine import DEFAULT_MODEL_ID, DEFAULT_REVISION, VLMEngine
+from watchtower_vlm.vlm_engine import BACKENDS, DEFAULT_MODEL_ID, DEFAULT_REVISION, VLMEngine
 
 
 def synthetic_image(size=(640, 480)):
@@ -15,6 +15,26 @@ def synthetic_image(size=(640, 480)):
     draw = ImageDraw.Draw(image)
     draw.ellipse((200, 280, 460, 400), fill=(40, 90, 200))
     return image
+
+
+def add_engine_args(parser):
+    """Command-line options shared by the benchmark and evaluation tools."""
+    group = parser.add_argument_group('model')
+    group.add_argument('--backend', choices=BACKENDS, default='transformers')
+    group.add_argument('--model-path', default=DEFAULT_MODEL_ID,
+                       help='HF repo id or local dir (llamacpp: repo holding the GGUF files)')
+    group.add_argument('--revision', default=DEFAULT_REVISION, help='transformers only')
+    group.add_argument('--device', default='auto', help='transformers only')
+    group.add_argument('--gguf-file', help='llamacpp: local .gguf path or glob in the repo')
+    group.add_argument('--mmproj-file', help='llamacpp: local mmproj path or glob in the repo')
+    group.add_argument('--n-gpu-layers', type=int, default=-1,
+                       help='llamacpp: layers to offload (-1 all, 0 CPU only)')
+
+
+def engine_from_args(args, **kwargs) -> VLMEngine:
+    return VLMEngine(model_path=args.model_path, revision=args.revision, device=args.device,
+                     backend=args.backend, gguf_file=args.gguf_file,
+                     mmproj_file=args.mmproj_file, n_gpu_layers=args.n_gpu_layers, **kwargs)
 
 
 def percentile(values, pct):
@@ -27,18 +47,16 @@ def main(argv=None):
     parser.add_argument('--image', help='Image file (default: synthetic puddle)')
     parser.add_argument('--prompt', default='Is there a liquid spill on the floor?')
     parser.add_argument('--runs', type=int, default=10)
-    parser.add_argument('--model-path', default=DEFAULT_MODEL_ID)
-    parser.add_argument('--revision', default=DEFAULT_REVISION)
-    parser.add_argument('--device', default='auto')
+    add_engine_args(parser)
     args = parser.parse_args(argv)
 
     image = Image.open(args.image).convert('RGB') if args.image else synthetic_image()
-    engine = VLMEngine(model_path=args.model_path, revision=args.revision, device=args.device)
+    engine = engine_from_args(args)
 
     start = time.perf_counter()
     engine.load()
     load_s = time.perf_counter() - start
-    print(f'model:    {args.model_path}@{args.revision} on {engine.resolved_device}')
+    print(f'model:    {args.model_path} [{args.backend}] on {engine.resolved_device}')
     print(f'load:     {load_s:.1f} s')
 
     start = time.perf_counter()
@@ -54,7 +72,7 @@ def main(argv=None):
     print(f'latency:  mean {statistics.mean(latencies):.0f} ms, '
           f'p50 {percentile(latencies, 50):.0f} ms, p95 {percentile(latencies, 95):.0f} ms '
           f'over {args.runs} runs ({1000 / statistics.mean(latencies):.1f} Hz)')
-    if engine.resolved_device.startswith('cuda'):
+    if args.backend == 'transformers' and engine.resolved_device.startswith('cuda'):
         import torch
         print(f'gpu mem:  {torch.cuda.max_memory_allocated() / 2**20:.0f} MiB peak')
     print(f'prompt:   {args.prompt}')

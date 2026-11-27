@@ -20,6 +20,7 @@ def generate_launch_description():
         'confidence_threshold': '0.5',
         'model_path': 'vikhyatk/moondream2',
         'device': 'auto',
+        'backend': 'transformers',
     }
     args = [DeclareLaunchArgument('config', default_value=default_config,
                                   description='Parameter YAML file.')]

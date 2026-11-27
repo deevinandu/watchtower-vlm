@@ -10,6 +10,10 @@ watchtower_vlm:
     model_path: vikhyatk/moondream2
     model_revision: "2025-01-09"
     device: auto
+    backend: transformers      # or llamacpp (GGUF via llama-cpp-python)
+    gguf_file: ""              # llamacpp: local path or glob in model_path repo
+    mmproj_file: ""
+    n_gpu_layers: -1
     fail_safe: true
     clear_frames: 3
     max_inference_hz: 0.0

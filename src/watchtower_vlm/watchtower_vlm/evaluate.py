@@ -16,9 +16,8 @@ import time
 
 from PIL import Image
 
-from watchtower_vlm.benchmark import percentile
-from watchtower_vlm.vlm_engine import (
-    DEFAULT_MODEL_ID, DEFAULT_PROMPT, DEFAULT_REVISION, VLMEngine)
+from watchtower_vlm.benchmark import add_engine_args, engine_from_args, percentile
+from watchtower_vlm.vlm_engine import DEFAULT_PROMPT, VLMEngine
 
 IMAGE_SUFFIXES = {'.jpg', '.jpeg', '.png', '.bmp', '.webp'}
 ANY_PROMPT = 'ANY (OR of all prompts, as the node decides)'
@@ -137,9 +136,7 @@ def main(argv=None):
     parser.add_argument('--ambiguous-confidence', type=float, default=0.5,
                         help='Confidence for answers that are neither yes nor no')
     parser.add_argument('--csv', type=Path, help='Write per-image predictions here')
-    parser.add_argument('--model-path', default=DEFAULT_MODEL_ID)
-    parser.add_argument('--revision', default=DEFAULT_REVISION)
-    parser.add_argument('--device', default='auto')
+    add_engine_args(parser)
     args = parser.parse_args(argv)
 
     prompts = args.prompts or [DEFAULT_PROMPT]
@@ -150,8 +147,7 @@ def main(argv=None):
     print(f'{len(samples)} images ({positives} anomaly, {len(samples) - positives} normal), '
           f'{len(prompts)} prompt(s)')
 
-    engine = VLMEngine(model_path=args.model_path, revision=args.revision, device=args.device,
-                       ambiguous_confidence=args.ambiguous_confidence)
+    engine = engine_from_args(args, ambiguous_confidence=args.ambiguous_confidence)
     engine.load()
     predictions = run(engine, samples, prompts)
     print_report(predictions, prompts)

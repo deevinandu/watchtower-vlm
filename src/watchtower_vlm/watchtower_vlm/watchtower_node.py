@@ -51,7 +51,14 @@ class WatchtowerNode(Node):
                                desc('Hugging Face model id or local directory.'))
         self.declare_parameter('model_revision', DEFAULT_REVISION,
                                desc('Model revision/tag; empty for default.'))
-        self.declare_parameter('device', 'auto', desc('auto, cpu, or cuda[:N].'))
+        self.declare_parameter('device', 'auto', desc('auto, cpu, or cuda[:N] (transformers).'))
+        self.declare_parameter('backend', 'transformers', desc('transformers or llamacpp.'))
+        self.declare_parameter(
+            'gguf_file', '', desc('llamacpp: local .gguf path or glob in model_path repo.'))
+        self.declare_parameter(
+            'mmproj_file', '', desc('llamacpp: local mmproj path or glob in model_path repo.'))
+        self.declare_parameter(
+            'n_gpu_layers', -1, desc('llamacpp: layers offloaded to GPU (-1 all, 0 CPU).'))
         self.declare_parameter(
             'fail_safe', True,
             desc('Assert E-Stop for every frame if the model fails to load or infer.'))
@@ -86,7 +93,11 @@ class WatchtowerNode(Node):
             model_path=self.get_parameter('model_path').value,
             revision=self.get_parameter('model_revision').value,
             device=self.get_parameter('device').value,
-            ambiguous_confidence=self.get_parameter('ambiguous_confidence').value)
+            ambiguous_confidence=self.get_parameter('ambiguous_confidence').value,
+            backend=self.get_parameter('backend').value,
+            gguf_file=self.get_parameter('gguf_file').value or None,
+            mmproj_file=self.get_parameter('mmproj_file').value or None,
+            n_gpu_layers=self.get_parameter('n_gpu_layers').value)
         self._engine_failed = False
 
         self._bridge = CvBridge()
@@ -134,7 +145,8 @@ class WatchtowerNode(Node):
             if param.name in ('max_inference_hz', 'frame_timeout_sec') and param.value < 0:
                 return SetParametersResult(successful=False, reason=f'{param.name} must be >= 0')
             if param.name in ('model_path', 'model_revision', 'device', 'image_topic',
-                              'e_stop_topic', 'ambiguous_confidence'):
+                              'e_stop_topic', 'ambiguous_confidence', 'backend',
+                              'gguf_file', 'mmproj_file', 'n_gpu_layers'):
                 return SetParametersResult(
                     successful=False, reason=f'{param.name} can only be set at startup')
         return SetParametersResult(successful=True)

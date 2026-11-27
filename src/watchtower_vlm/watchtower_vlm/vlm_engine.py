@@ -8,6 +8,7 @@ from typing import Optional
 DEFAULT_MODEL_ID = 'vikhyatk/moondream2'
 DEFAULT_REVISION = '2025-01-09'
 DEFAULT_PROMPT = 'Is there a liquid spill, a dropped object, or a collision?'
+BACKENDS = ('transformers', 'llamacpp')
 YES_NO_SUFFIX = " Answer with only 'yes' or 'no'."
 
 _YES = re.compile(r'\b(yes|yeah|yep|true|affirmative)\b')
@@ -42,8 +43,15 @@ class VLMEngine:
     def __init__(self, model_path: str = DEFAULT_MODEL_ID,
                  revision: Optional[str] = DEFAULT_REVISION,
                  device: str = 'auto', ambiguous_confidence: float = 0.5,
-                 model=None):
+                 model=None, backend: str = 'transformers', gguf_file: Optional[str] = None,
+                 mmproj_file: Optional[str] = None, n_gpu_layers: int = -1):
+        if backend not in BACKENDS:
+            raise ValueError(f'backend must be one of {BACKENDS}, got {backend!r}')
         self.model_path = model_path
+        self.backend = backend
+        self.gguf_file = gguf_file
+        self.mmproj_file = mmproj_file
+        self.n_gpu_layers = n_gpu_layers
         self.revision = revision or None
         self.device = device
         self.ambiguous_confidence = ambiguous_confidence
@@ -59,6 +67,9 @@ class VLMEngine:
         """Load weights (slow, may download). Safe to call more than once."""
         if self._model is not None:
             return
+        if self.backend == 'llamacpp':
+            self._load_llamacpp()
+            return
         import torch
         from transformers import AutoModelForCausalLM
 
@@ -72,6 +83,16 @@ class VLMEngine:
             dtype=dtype, device_map={'': device})
         model.eval()
         self._model = model
+
+    def _load_llamacpp(self):
+        from watchtower_vlm import llamacpp_backend as backend
+
+        self._model = backend.LlamaCppMoondream(
+            self.model_path, gguf_file=self.gguf_file or backend.DEFAULT_GGUF_FILE,
+            mmproj_file=self.mmproj_file or backend.DEFAULT_MMPROJ_FILE,
+            revision=self.revision, n_gpu_layers=self.n_gpu_layers)
+        offloaded = self.n_gpu_layers != 0 and backend.gpu_offload_supported()
+        self.resolved_device = 'cuda (llama.cpp)' if offloaded else 'cpu (llama.cpp)'
 
     def query(self, image, prompt: str) -> str:
         """Return the model's raw text answer for ``prompt`` about ``image``."""

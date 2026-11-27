@@ -11,3 +11,8 @@ accelerate>=0.30
 einops
 pyvips[binary]  # required by moondream2 remote code; wheel bundles libvips
 Pillow>=10.0  # system Pillow 9.0 lacks Image.Resampling, which transformers needs
+
+# Optional: llama.cpp backend (backend:=llamacpp). Build from source with CUDA, e.g. for RTX 50-series:
+#   CMAKE_ARGS="-DGGML_CUDA=on -DCMAKE_CUDA_ARCHITECTURES=120" CUDACXX=/usr/local/cuda/bin/nvcc \
+#     .venv/bin/pip install llama-cpp-python
+# llama-cpp-python>=0.3
