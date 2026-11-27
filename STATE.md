@@ -1,9 +1,9 @@
 # CURRENT CONTEXT & STATE
-**Active Milestone:** M9 (Evaluation Harness)
-**Last Completed Action:** M8, observability, is done.
-- `~/status` (`/watchtower_vlm/status`) is a `std_msgs/String` carrying JSON from `_status()`. It is published from `_decide()` after every decision, from `_trip()` on a trip transition only (the watchdog does not spam it), and from reset. JSON was chosen so the package can stay `ament_python`; a custom msg would need a separate `ament_cmake` interfaces package.
-- `/diagnostics`: a 1 Hz timer, `_diagnostics_callback`. ERROR means the model failed or the camera is stale. WARN means the model is loading or the E-Stop is active. OK means monitoring. `hardware_id` is the model path, and the key/values mirror the status dict.
-- New state is `_trip_reason`, `_last_answer`, `_last_confidence`, `_vote_mean`, `_latency_ms` (VLM call only) and `_inference_hz` (an EMA of the decision interval).
-- Tests: 24 pass. Live check with the real model: status showed latency 338 ms and 3.04 Hz, and diagnostics showed WARN with the reason.
-**Current Blockers:** No labelled real-world footage is in the repo yet. M9 needs a dataset; the user must supply one, or the harness accepts any folder.
-**Next Immediate Step:** M9. Add a `watchtower_vlm/evaluate.py` entry point that takes a folder laid out as `anomaly/` and `normal/` (or a CSV of path,label), one or more `--prompt` values and a threshold sweep. It runs `VLMEngine.evaluate` and reports TP/FP/FN/TN, precision, recall, false-positive rate and latency per prompt. Rosbag input is optional and comes later.
+**Active Milestone:** M10 (Performance & Coverage)
+**Last Completed Action:** M9, the evaluation harness, is done.
+- `watchtower_vlm/evaluate.py` (`ros2 run watchtower_vlm evaluate <dataset>`): `load_dataset()` accepts an anomaly/ + normal/ folder or a `path,label` CSV with relative paths resolved against it. `run()` returns `Prediction` items. `summarise()` gives TP/FP/FN/TN, precision, recall, FPR, accuracy, the ambiguous count and latency mean/p95, using NaN when a denominator is 0. `print_report()` gives a table per prompt, and `--csv` writes per-image rows. `percentile` is reused from `benchmark.py`.
+- No threshold sweep: per-frame confidence is discrete (0, 1 or ambiguous), so a sweep needs vote_window over video, i.e. rosbag input, which is not yet built.
+- Tests: 29 pass (5 new in `test_evaluate.py`, using a colour-keyed fake model).
+- Live smoke run on 12 synthetic images (drawn blobs on tiled floors, generated only in the scratchpad): moondream2 found 0/6 and 1/6 anomalies on two prompts, with 0 false positives and about 330 ms each. The model is conservative, and synthetic blobs are not realistic.
+**Current Blockers:** No real labelled dataset. Accuracy numbers mean nothing until the user supplies one, from robot camera frames or a public spill/fall dataset.
+**Next Immediate Step:** M10. (a) Support multiple prompts per frame: a `prompts` string-array param, OR-combined, with the triggering prompt shown in reason/status. (b) Add an optional `llama.cpp` GGUF backend behind a `backend` param (`transformers` | `llamacpp`) via `llama-cpp-python`, keeping the `VLMEngine` interface (`load`/`loaded`/`evaluate`/`model_path`). Do (a) first; it is cheap and independent.

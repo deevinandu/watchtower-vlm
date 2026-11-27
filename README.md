@@ -68,6 +68,19 @@ ros2 topic echo /watchtower_vlm/status --field data
 
 Defaults live in `config/watchtower.yaml`; pass `config:=/path/to.yaml` to replace it.
 
+## Evaluate prompts
+
+Put labelled images in `anomaly/` and `normal/` subfolders, or list them in a CSV with `path,label` columns. Then compare prompts:
+
+```bash
+ros2 run watchtower_vlm evaluate dataset/ \
+  --prompt "Is there a liquid spill on the floor?" \
+  --prompt "Is there a puddle or stain on the floor?" \
+  --csv results.csv
+```
+
+The report gives one row per prompt with TP/FP/FN/TN, precision, recall, false-positive rate, the number of ambiguous answers and mean latency. `--csv` writes per-image answers so you can inspect individual misses. The model answers yes/no, so each frame's confidence is only 0, 1 or `--ambiguous-confidence`. A threshold sweep only becomes meaningful with `vote_window > 1` on video.
+
 ## Test
 
 ```bash

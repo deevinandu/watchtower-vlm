@@ -28,7 +28,7 @@
       Latched E-Stop (clears only after N clean frames or a `~/reset` service call), inference-rate cap, and a camera watchdog that asserts E-Stop if no frames arrive within a timeout.
 - [x] **M8: Observability**
       Publish a status topic (raw answer, confidence, latency) and `diagnostic_msgs` diagnostics so the stop reason is visible in RViz/rqt.
-- [ ] **M9: Evaluation Harness**
+- [x] **M9: Evaluation Harness**
       Replay a labelled image folder or rosbag through the engine and report false-positive / miss rates per prompt and threshold.
 - [ ] **M10: Performance & Coverage**
       Optional `llama.cpp` GGUF backend for CPU/Jetson, and multiple prompts per frame (spill, fall, collision) combined into one decision.
