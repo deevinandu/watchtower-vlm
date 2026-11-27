@@ -7,6 +7,7 @@ from typing import Optional
 
 DEFAULT_MODEL_ID = 'vikhyatk/moondream2'
 DEFAULT_REVISION = '2025-01-09'
+DEFAULT_PROMPT = 'Is there a liquid spill, a dropped object, or a collision?'
 YES_NO_SUFFIX = " Answer with only 'yes' or 'no'."
 
 _YES = re.compile(r'\b(yes|yeah|yep|true|affirmative)\b')
@@ -68,7 +69,7 @@ class VLMEngine:
         dtype = torch.float16 if device.startswith('cuda') else torch.float32
         model = AutoModelForCausalLM.from_pretrained(
             self.model_path, revision=self.revision, trust_remote_code=True,
-            torch_dtype=dtype, device_map={'': device})
+            dtype=dtype, device_map={'': device})
         model.eval()
         self._model = model
 
@@ -94,6 +95,14 @@ class VLMEngine:
         else:
             confidence = 1.0 if verdict else 0.0
         return DetectionResult(anomaly=confidence >= 0.5, confidence=confidence, raw_answer=raw)
+
+    def evaluate_many(self, image, prompts) -> list:
+        """Evaluate several prompts on one image, encoding the image only once if possible."""
+        if self._model is not None and hasattr(self._model, 'encode_image') \
+                and hasattr(self._model, 'query'):
+            with self._lock:
+                image = self._model.encode_image(image)
+        return [self.evaluate(image, prompt) for prompt in prompts]
 
     def detect(self, image, prompt: str) -> bool:
         """Return True if the VLM reports an anomaly in ``image``."""

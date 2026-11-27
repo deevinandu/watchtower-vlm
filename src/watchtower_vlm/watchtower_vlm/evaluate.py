@@ -17,9 +17,11 @@ import time
 from PIL import Image
 
 from watchtower_vlm.benchmark import percentile
-from watchtower_vlm.vlm_engine import DEFAULT_MODEL_ID, DEFAULT_REVISION, VLMEngine
+from watchtower_vlm.vlm_engine import (
+    DEFAULT_MODEL_ID, DEFAULT_PROMPT, DEFAULT_REVISION, VLMEngine)
 
 IMAGE_SUFFIXES = {'.jpg', '.jpeg', '.png', '.bmp', '.webp'}
+ANY_PROMPT = 'ANY (OR of all prompts, as the node decides)'
 TRUE_LABELS = {'1', 'true', 'yes', 'anomaly'}
 FALSE_LABELS = {'0', 'false', 'no', 'normal'}
 
@@ -64,15 +66,21 @@ def load_dataset(source: Path) -> list:
 
 
 def run(engine: VLMEngine, samples: list, prompts: list) -> list:
+    """Evaluate every prompt on every image; with >1 prompt also add ANY_PROMPT rows."""
     predictions = []
-    for prompt in prompts:
-        for sample in samples:
-            image = Image.open(sample.path).convert('RGB')
-            started = time.perf_counter()
-            result = engine.evaluate(image, prompt)
-            latency_ms = (time.perf_counter() - started) * 1000
+    for sample in samples:
+        image = Image.open(sample.path).convert('RGB')
+        started = time.perf_counter()
+        results = engine.evaluate_many(image, prompts)
+        total_ms = (time.perf_counter() - started) * 1000
+        for prompt, result in zip(prompts, results):
             predictions.append(Prediction(prompt, sample, result.raw_answer.strip(),
-                                          result.confidence, result.anomaly, latency_ms))
+                                          result.confidence, result.anomaly,
+                                          total_ms / len(prompts)))
+        if len(prompts) > 1:
+            worst = max(results, key=lambda r: r.confidence)
+            predictions.append(Prediction(ANY_PROMPT, sample, worst.raw_answer.strip(),
+                                          worst.confidence, worst.anomaly, total_ms))
     return predictions
 
 
@@ -102,7 +110,7 @@ def print_report(predictions: list, prompts: list, out=sys.stdout):
               f'{"prec":>5} {"recall":>6} {"FPR":>5} {"ambig":>5} {"ms":>6}')
     print(header, file=out)
     print('-' * len(header), file=out)
-    for prompt in prompts:
+    for prompt in prompts + ([ANY_PROMPT] if len(prompts) > 1 else []):
         m = summarise([p for p in predictions if p.prompt == prompt])
         label = prompt if len(prompt) <= 48 else prompt[:45] + '...'
         print(f'{label:<48} {m["n"]:>4} {m["tp"]:>4} {m["fp"]:>4} {m["fn"]:>4} {m["tn"]:>4} '
@@ -134,7 +142,7 @@ def main(argv=None):
     parser.add_argument('--device', default='auto')
     args = parser.parse_args(argv)
 
-    prompts = args.prompts or ['Is there a liquid spill, a dropped object, or a collision?']
+    prompts = args.prompts or [DEFAULT_PROMPT]
     samples = load_dataset(args.dataset)
     if not samples:
         parser.error(f'No images found in {args.dataset}')

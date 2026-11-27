@@ -2,7 +2,8 @@ watchtower_vlm:
   ros__parameters:
     image_topic: /camera/image_raw
     e_stop_topic: /watchtower/e_stop
-    prompt: "Is there a liquid spill, a dropped object, or a collision?"
+    prompts:
+      - "Is there a liquid spill, a dropped object, or a collision?"
     confidence_threshold: 0.5
     vote_window: 1
     ambiguous_confidence: 0.5

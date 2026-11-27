@@ -21,7 +21,8 @@ from std_srvs.srv import Trigger
 
 from watchtower_vlm.frame_queue import LatestFrameQueue
 from watchtower_vlm.latch import EStopLatch
-from watchtower_vlm.vlm_engine import DEFAULT_MODEL_ID, DEFAULT_REVISION, VLMEngine
+from watchtower_vlm.vlm_engine import (
+    DEFAULT_MODEL_ID, DEFAULT_PROMPT, DEFAULT_REVISION, VLMEngine)
 
 
 class WatchtowerNode(Node):
@@ -36,8 +37,8 @@ class WatchtowerNode(Node):
         self.declare_parameter('image_topic', '/camera/image_raw', desc('Input camera topic.'))
         self.declare_parameter('e_stop_topic', '/watchtower/e_stop', desc('E-Stop output topic.'))
         self.declare_parameter(
-            'prompt', 'Is there a liquid spill, a dropped object, or a collision?',
-            desc('Yes/no question asked of the VLM for every frame.'))
+            'prompts', [DEFAULT_PROMPT],
+            desc('Yes/no questions asked of the VLM for every frame; any yes is an anomaly.'))
         self.declare_parameter(
             'confidence_threshold', 0.5,
             desc('E-Stop fires when mean anomaly confidence over vote_window >= this.'))
@@ -74,6 +75,8 @@ class WatchtowerNode(Node):
         self._trip_reason = None
         self._last_answer = None
         self._last_confidence = None
+        self._last_answers = {}
+        self._trigger_prompt = None
         self._vote_mean = None
         self._latency_ms = None
         self._last_decision_time = None
@@ -121,6 +124,9 @@ class WatchtowerNode(Node):
                 if param.value < 1:
                     return SetParametersResult(successful=False, reason='vote_window must be >= 1')
                 self._votes = deque(self._votes, maxlen=param.value)
+            if param.name == 'prompts' and not [p for p in param.value if p.strip()]:
+                return SetParametersResult(
+                    successful=False, reason='prompts must contain a non-empty prompt')
             if param.name == 'clear_frames':
                 if param.value < 1:
                     return SetParametersResult(successful=False, reason='clear_frames must be >= 1')
@@ -196,20 +202,26 @@ class WatchtowerNode(Node):
             self.get_logger().warning(f'Failed to convert image: {exc}')
             return
 
-        prompt = self.get_parameter('prompt').value
+        prompts = self._prompts()
         try:
             started = time.monotonic()
-            result = self._engine.evaluate(PILImage.fromarray(frame), prompt)
+            results = self._engine.evaluate_many(PILImage.fromarray(frame), prompts)
             self._latency_ms = (time.monotonic() - started) * 1000.0
         except Exception as exc:  # noqa: BLE001 - keep the safety loop alive
             self._handle_failure(f'Inference failed: {exc}')
             return
 
-        self.get_logger().debug(
-            f'VLM answer "{result.raw_answer}" -> confidence {result.confidence:.2f}')
+        # OR-combine: the most alarming answer across prompts decides this frame.
+        prompt, result = max(zip(prompts, results), key=lambda pair: pair[1].confidence)
+        self._last_answers = {p: r.raw_answer.strip() for p, r in zip(prompts, results)}
         self._last_answer = result.raw_answer.strip()
         self._last_confidence = result.confidence
+        self._trigger_prompt = prompt if result.anomaly else None
+        self.get_logger().debug(f'VLM answers {self._last_answers}')
         self._decide(self._vote(result.confidence))
+
+    def _prompts(self) -> list:
+        return [p for p in self.get_parameter('prompts').value if p.strip()]
 
     def _vote(self, confidence: float) -> bool:
         self._votes.append(confidence)
@@ -231,7 +243,8 @@ class WatchtowerNode(Node):
             was_active = self._latch.active
             active = self._latch.update(anomaly)
             if anomaly:
-                self._trip_reason = f'Anomaly detected: "{self._last_answer}"'
+                self._trip_reason = (
+                    f'Anomaly detected: "{self._trigger_prompt}" -> "{self._last_answer}"')
             elif not active:
                 self._trip_reason = None
         self._e_stop_pub.publish(Bool(data=active))
@@ -265,7 +278,9 @@ class WatchtowerNode(Node):
         return {
             'e_stop': self._latch.active,
             'reason': self._trip_reason,
-            'prompt': self.get_parameter('prompt').value,
+            'prompts': self._prompts(),
+            'answers': self._last_answers,
+            'trigger_prompt': self._trigger_prompt,
             'raw_answer': self._last_answer,
             'confidence': self._last_confidence,
             'vote_mean': rounded(self._vote_mean, 3),

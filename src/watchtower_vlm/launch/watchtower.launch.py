@@ -15,7 +15,8 @@ def generate_launch_description():
 
     overrides = {
         'image_topic': '/camera/image_raw',
-        'prompt': 'Is there a liquid spill, a dropped object, or a collision?',
+        # YAML list, e.g. prompts:="['Is liquid spilling?', 'Has something fallen?']"
+        'prompts': "['Is there a liquid spill, a dropped object, or a collision?']",
         'confidence_threshold': '0.5',
         'model_path': 'vikhyatk/moondream2',
         'device': 'auto',

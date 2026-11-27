@@ -26,14 +26,15 @@ Measured on an RTX 5070 Ti Laptop GPU (fp16): load 3.2 s with weights cached (74
 ## Run
 
 ```bash
-ros2 launch watchtower_vlm watchtower.launch.py prompt:="Is liquid spilling?" device:=cuda
+ros2 launch watchtower_vlm watchtower.launch.py device:=cuda \
+  prompts:="['Is liquid spilling on the floor?', 'Has an object fallen over?']"
 ```
 
 | Parameter | Default | Notes |
 |---|---|---|
 | `image_topic` | `/camera/image_raw` | startup only |
 | `e_stop_topic` | `/watchtower/e_stop` | startup only |
-| `prompt` | spill/drop/collision question | runtime-settable; a yes/no suffix is appended |
+| `prompts` | `[spill/drop/collision question]` | runtime-settable string array; each gets a yes/no suffix, and any "yes" counts as an anomaly. The image is encoded once per frame, so each extra prompt costs about 30 ms, not about 320 ms |
 | `confidence_threshold` | `0.5` | runtime-settable, `[0,1]`; E-Stop when mean confidence over `vote_window` ≥ threshold |
 | `vote_window` | `1` | runtime-settable; >1 debounces single-frame false positives |
 | `ambiguous_confidence` | `0.5` | confidence given to answers that are neither yes nor no |
@@ -54,7 +55,7 @@ A reset is refused while the VLM is unavailable. If the camera is still silent, 
 
 ### Monitoring
 
-- `/watchtower_vlm/status` (`std_msgs/String`, JSON): published after every decision and every trip. It carries `e_stop`, `reason`, `prompt`, `raw_answer`, `confidence`, `vote_mean`, `latency_ms`, `inference_hz`, `camera_age_s`, `model_loaded`, `model_failed` and `dropped_frames`.
+- `/watchtower_vlm/status` (`std_msgs/String`, JSON): published after every decision and every trip. It carries `e_stop`, `reason`, `prompts`, `answers` (per prompt), `trigger_prompt`, `raw_answer`, `confidence`, `vote_mean`, `latency_ms`, `inference_hz`, `camera_age_s`, `model_loaded`, `model_failed` and `dropped_frames`.
 - `/diagnostics` (`diagnostic_msgs/DiagnosticArray`, 1 Hz):
   - ERROR when the VLM failed to load or the camera is silent;
   - WARN while the model is loading or the E-Stop is active (the message gives the reason);
@@ -79,7 +80,7 @@ ros2 run watchtower_vlm evaluate dataset/ \
   --csv results.csv
 ```
 
-The report gives one row per prompt with TP/FP/FN/TN, precision, recall, false-positive rate, the number of ambiguous answers and mean latency. `--csv` writes per-image answers so you can inspect individual misses. The model answers yes/no, so each frame's confidence is only 0, 1 or `--ambiguous-confidence`. A threshold sweep only becomes meaningful with `vote_window > 1` on video.
+With more than one prompt, an extra **ANY** row shows the OR-combined result, which is what the node acts on. The report gives one row per prompt with TP/FP/FN/TN, precision, recall, false-positive rate, the number of ambiguous answers and mean latency. `--csv` writes per-image answers so you can inspect individual misses. The model answers yes/no, so each frame's confidence is only 0, 1 or `--ambiguous-confidence`. A threshold sweep only becomes meaningful with `vote_window > 1` on video.
 
 ## Test
 

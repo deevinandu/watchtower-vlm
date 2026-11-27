@@ -142,6 +142,7 @@ def test_status_reports_answer_reason_and_latency(ros):
     status = json.loads(statuses[-1].data)
     assert status['e_stop'] is True
     assert status['raw_answer'] == 'Yes, a puddle.'
+    assert status['trigger_prompt'] == status['prompts'][0]
     assert 'puddle' in status['reason']
     assert status['latency_ms'] >= 0 and status['model_loaded'] is True
 
@@ -164,3 +165,24 @@ def test_diagnostics_levels(ros):
             break
         time.sleep(0.05)
     assert any(d.status[0].level == DiagnosticStatus.OK for d in ok_diags)
+
+
+class PromptModel:
+    """Answers yes only to prompts that mention 'fallen'."""
+
+    def query(self, image, prompt):
+        return {'answer': 'Yes.' if 'fallen' in prompt else 'No.'}
+
+
+def test_any_prompt_trips_and_is_reported(ros):
+    import json
+    from std_msgs.msg import String
+
+    h = ros(VLMEngine(model=PromptModel()),
+            prompts=['Is there a spill?', 'Has something fallen?'])
+    statuses = collect(h, String, '/watchtower_vlm/status')
+    assert h.feed_until(1) == [True]
+    assert wait_for(lambda: any(json.loads(m.data)['trigger_prompt'] for m in statuses))
+    status = next(json.loads(m.data) for m in statuses if json.loads(m.data)['trigger_prompt'])
+    assert status['trigger_prompt'] == 'Has something fallen?'
+    assert status['answers'] == {'Is there a spill?': 'No.', 'Has something fallen?': 'Yes.'}

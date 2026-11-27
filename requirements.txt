@@ -6,7 +6,7 @@
 numpy<2  # ROS Humble's cv_bridge is built against NumPy 1.x
 setuptools==58.2.0  # newer setuptools breaks colcon/ament_python builds on Humble
 torch>=2.7
-transformers>=4.44,<5
+transformers>=4.56,<5  # `dtype=` kwarg
 accelerate>=0.30
 einops
 pyvips[binary]  # required by moondream2 remote code; wheel bundles libvips

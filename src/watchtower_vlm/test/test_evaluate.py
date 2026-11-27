@@ -66,8 +66,30 @@ def test_report_and_csv_cover_every_prompt(tmp_path):
     print_report(predictions, prompts, out=out)
     assert 'Spill?' in out.getvalue() and '...' in out.getvalue()
     write_csv(predictions, tmp_path / 'out.csv')
-    assert len((tmp_path / 'out.csv').read_text().strip().splitlines()) == 1 + 4
+    assert 'ANY' in out.getvalue()
+    # 2 images x (2 prompts + 1 ANY row) + header
+    assert len((tmp_path / 'out.csv').read_text().strip().splitlines()) == 1 + 6
 
 
 def test_empty_class_gives_nan_not_crash():
     assert math.isnan(summarise([])['precision'])
+
+
+class EncodingModel(ColourModel):
+    def __init__(self):
+        self.encodes = 0
+
+    def encode_image(self, image):
+        self.encodes += 1
+        return image
+
+
+def test_any_prompt_ors_results_and_encodes_once(tmp_path):
+    from watchtower_vlm.evaluate import ANY_PROMPT
+
+    root = make_dataset(tmp_path, [BLUE], [GREY])
+    model = EncodingModel()
+    predictions = run(VLMEngine(model=model), load_dataset(root), ['a?', 'b?', 'c?'])
+    assert model.encodes == 2  # once per image, not per prompt
+    any_rows = [p for p in predictions if p.prompt == ANY_PROMPT]
+    assert [p.predicted for p in any_rows] == [True, False]
