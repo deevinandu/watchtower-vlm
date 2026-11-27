@@ -24,7 +24,7 @@
       Expose the VLM prompt, confidence threshold, and model path as ROS 2 Parameters. Write a `watchtower.launch.py` file to start it.
 - [x] **M6: Real Model Bring-up**
       Project-local `.venv` (with `--system-site-packages` so rclpy/cv_bridge stay visible), install torch (CUDA 12.8+ wheels for Blackwell GPUs) + transformers, and add a benchmark script that runs moondream2 on a sample image and reports load time, per-frame latency, and the raw answer.
-- [ ] **M7: Safety Hardening**
+- [x] **M7: Safety Hardening**
       Latched E-Stop (clears only after N clean frames or a `~/reset` service call), inference-rate cap, and a camera watchdog that asserts E-Stop if no frames arrive within a timeout.
 - [ ] **M8: Observability**
       Publish a status topic (raw answer, confidence, latency) and `diagnostic_msgs` diagnostics so the stop reason is visible in RViz/rqt.

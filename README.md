@@ -40,6 +40,17 @@ ros2 launch watchtower_vlm watchtower.launch.py prompt:="Is liquid spilling?" de
 | `model_path` / `model_revision` | `vikhyatk/moondream2` / `2025-01-09` | HF id or local dir |
 | `device` | `auto` | `auto`, `cpu`, `cuda[:N]` |
 | `fail_safe` | `true` | assert E-Stop on every frame if the model fails to load or infer |
+| `clear_frames` | `3` | runtime-settable; consecutive clean decisions needed to release a latched E-Stop |
+| `max_inference_hz` | `0.0` | runtime-settable; caps inference rate (0 = as fast as the model runs) |
+| `frame_timeout_sec` | `2.0` | runtime-settable; assert E-Stop if the camera is silent this long (0 = off) |
+
+The E-Stop **latches**: one anomaly, inference failure or camera timeout asserts it, and it releases only after `clear_frames` consecutive clean decisions or a manual reset:
+
+```bash
+ros2 service call /watchtower_vlm/reset std_srvs/srv/Trigger
+```
+
+A reset is refused while the VLM is unavailable. If the camera is still silent, the watchdog re-asserts the stop within 0.25 s.
 
 Defaults live in `config/watchtower.yaml`; pass `config:=/path/to.yaml` to replace it.
 

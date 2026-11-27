@@ -10,3 +10,6 @@ watchtower_vlm:
     model_revision: "2025-01-09"
     device: auto
     fail_safe: true
+    clear_frames: 3
+    max_inference_hz: 0.0
+    frame_timeout_sec: 2.0
