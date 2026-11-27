@@ -32,3 +32,11 @@
       Replay a labelled image folder or rosbag through the engine and report false-positive / miss rates per prompt and threshold.
 - [x] **M10: Performance & Coverage**
       Optional `llama.cpp` GGUF backend for CPU/Jetson, and multiple prompts per frame (spill, fall, collision) combined into one decision.
+- [ ] **M11: Real-World Dataset**
+      Collect a labelled set of real camera frames (anomaly/ and normal/, a few dozen minimum, from the target robot or a public spill/fall dataset), then pick prompts and backend from `evaluate` results.
+- [x] **M12: Quantized GGUF**
+      Quantize the moondream2 text model to Q4/Q5/Q8 GGUF, add a `quantize` tool, and re-benchmark CPU and GPU latency plus answer drift against f16, for edge (CPU/Jetson) targets.
+- [ ] **M13: Rosbag Evaluation**
+      Let `evaluate` replay labelled rosbags through the full decision path (vote_window, latch, clear_frames), so the temporal parameters can be tuned on video.
+- [ ] **M14: Launch Integration Test**
+      `launch_testing` test that starts `watchtower.launch.py` with a fake engine and checks topics, services, parameters and fail-safe behaviour.

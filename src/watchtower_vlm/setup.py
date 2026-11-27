@@ -27,6 +27,7 @@ setup(
             'watchtower_node = watchtower_vlm.watchtower_node:main',
             'benchmark = watchtower_vlm.benchmark:main',
             'evaluate = watchtower_vlm.evaluate:main',
+            'quantize = watchtower_vlm.quantize:main',
         ],
     },
 )

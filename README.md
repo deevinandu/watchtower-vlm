@@ -76,7 +76,7 @@ Defaults live in `config/watchtower.yaml`; pass `config:=/path/to.yaml` to repla
 | Weights | moondream2 `2025-01-09`, fp16 | the same revision's `moondream2-*-f16.gguf` files |
 | GPU latency, 1 prompt | ~320 ms | ~160 ms |
 | Extra prompts | ~30 ms each (image encoded once) | ~180 ms each (image re-encoded) |
-| CPU only (24 cores) | not measured | ~5 s/frame (f16, not quantized) |
+| CPU only (24 cores) | not measured | ~1.7 s/frame f16, ~0.8 s Q4_K_M (see below) |
 | Install | `requirements.txt` | build `llama-cpp-python` (see `requirements.txt`) |
 
 All figures are from an RTX 5070 Ti Laptop GPU.
@@ -86,6 +86,26 @@ ros2 launch watchtower_vlm watchtower.launch.py backend:=llamacpp
 ```
 
 For llama.cpp, `gguf_file` and `mmproj_file` accept local paths, for example a quantized GGUF you made with `llama-quantize`. They also accept filename globs, which are resolved in `model_path` at `model_revision`; the defaults are `*text-model*` and `*mmproj*`. Set `n_gpu_layers:=0` for CPU only.
+
+### Quantized models
+
+```bash
+ros2 run watchtower_vlm quantize --type Q4_K_M        # also: Q4_0 Q5_K_M Q8_0
+ros2 launch watchtower_vlm watchtower.launch.py backend:=llamacpp \
+  gguf_file:=$PWD/models/moondream2-text-model-Q4_K_M.gguf n_gpu_layers:=0
+```
+
+This quantizes only the text model; the vision projector stays f16. The tool uses llama.cpp's `llama_model_quantize` through `llama-cpp-python`, so no separate llama.cpp checkout is needed. Outputs go to `models/`, which is gitignored.
+
+| Type | Text model | CPU only | GPU | Answers changed vs f16 (36) |
+|---|---|---|---|---|
+| f16 | 2708 MiB | 1729 ms | 159 ms | — |
+| Q8_0 | 1440 MiB | 1433 ms | 156 ms | 0 |
+| Q5_K_M | 991 MiB | 806 ms | 157 ms | 1 |
+| **Q4_K_M** | **877 MiB** | **856 ms** | **155 ms** | **0** |
+| Q4_0 | 790 MiB | 808 ms | 147 ms | 3 |
+
+Q4_K_M is the recommended edge setting. On the GPU quantization barely matters, because the text model isn't the bottleneck there. The drift counts come from the 12-image synthetic set only. They have not been measured on a Jetson.
 
 The backends **do not give identical answers** on the same image. On the synthetic set, llama.cpp caught 3/6 puddles and transformers caught 1/6, with no false positives from either. Re-run `evaluate` with `--backend` before switching.
 

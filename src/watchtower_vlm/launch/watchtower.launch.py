@@ -21,6 +21,8 @@ def generate_launch_description():
         'model_path': 'vikhyatk/moondream2',
         'device': 'auto',
         'backend': 'transformers',
+        'gguf_file': "''",  # quoted so launch_ros parses it as an empty string
+        'n_gpu_layers': '-1',
     }
     args = [DeclareLaunchArgument('config', default_value=default_config,
                                   description='Parameter YAML file.')]
