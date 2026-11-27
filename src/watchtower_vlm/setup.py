@@ -25,6 +25,7 @@ setup(
     entry_points={
         'console_scripts': [
             'watchtower_node = watchtower_vlm.watchtower_node:main',
+            'benchmark = watchtower_vlm.benchmark:main',
         ],
     },
 )

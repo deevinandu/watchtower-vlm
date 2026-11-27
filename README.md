@@ -4,11 +4,24 @@ ROS 2 (Humble/Jazzy) semantic safety node. It runs camera frames through a local
 
 ## Build
 
+The VLM deps are not rosdep-able, so they live in a project venv that can still see ROS:
+
 ```bash
-pip install -r requirements.txt   # torch, transformers, ... (not rosdep-able)
-colcon build --symlink-install
+source /opt/ros/humble/setup.bash
+python3 -m venv --system-site-packages .venv && touch .venv/COLCON_IGNORE
+.venv/bin/pip install -r requirements.txt --extra-index-url https://download.pytorch.org/whl/cu128
+source .venv/bin/activate
+python -m colcon build --symlink-install   # build with the venv python so entry points use it
 source install/setup.bash
 ```
+
+## Benchmark
+
+```bash
+ros2 run watchtower_vlm benchmark --image frame.jpg --prompt "Is liquid spilling?" --runs 10
+```
+
+Measured on an RTX 5070 Ti Laptop GPU (fp16): load 3.2 s with weights cached (74 s on first download), ~320 ms/frame (≈3.1 Hz), 4.5 GiB peak VRAM. The node outputs E-Stop at ≈2.3 Hz from a 30 Hz camera.
 
 ## Run
 

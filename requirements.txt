@@ -1,7 +1,13 @@
 # Python deps for the VLM engine (not available as rosdep keys).
-torch>=2.1
-transformers>=4.44
+# Install into a venv that can still see ROS:
+#   python3 -m venv --system-site-packages .venv && touch .venv/COLCON_IGNORE
+#   .venv/bin/pip install -r requirements.txt --extra-index-url https://download.pytorch.org/whl/cu128
+# (cu128 wheels are required for RTX 50-series / Blackwell GPUs.)
+numpy<2  # ROS Humble's cv_bridge is built against NumPy 1.x
+setuptools==58.2.0  # newer setuptools breaks colcon/ament_python builds on Humble
+torch>=2.7
+transformers>=4.44,<5
 accelerate>=0.30
 einops
-pyvips  # used by moondream2 remote code for image preprocessing
-Pillow>=9.0
+pyvips[binary]  # required by moondream2 remote code; wheel bundles libvips
+Pillow>=10.0  # system Pillow 9.0 lacks Image.Resampling, which transformers needs

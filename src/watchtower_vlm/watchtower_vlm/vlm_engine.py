@@ -47,6 +47,7 @@ class VLMEngine:
         self.device = device
         self.ambiguous_confidence = ambiguous_confidence
         self._model = model
+        self.resolved_device = device
         self._lock = threading.Lock()
 
     @property
@@ -63,6 +64,7 @@ class VLMEngine:
         device = self.device
         if device == 'auto':
             device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        self.resolved_device = device
         dtype = torch.float16 if device.startswith('cuda') else torch.float32
         model = AutoModelForCausalLM.from_pretrained(
             self.model_path, revision=self.revision, trust_remote_code=True,
