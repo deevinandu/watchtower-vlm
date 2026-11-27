@@ -116,3 +116,51 @@ def test_rate_cap_limits_inference(ros):
         h.pub.publish(FRAME)
         time.sleep(0.02)
     assert len(h.received) - before <= 4
+
+
+def collect(h, msg_type, topic):
+    messages = []
+    h.peer.create_subscription(msg_type, topic, messages.append, 10)
+    return messages
+
+
+def wait_for(predicate, timeout=3.0):
+    deadline = time.time() + timeout
+    while not predicate() and time.time() < deadline:
+        time.sleep(0.05)
+    return predicate()
+
+
+def test_status_reports_answer_reason_and_latency(ros):
+    import json
+    from std_msgs.msg import String
+
+    h = ros(VLMEngine(model=ScriptedModel('Yes, a puddle.')))
+    statuses = collect(h, String, '/watchtower_vlm/status')
+    h.feed_until(3)
+    assert wait_for(lambda: statuses)
+    status = json.loads(statuses[-1].data)
+    assert status['e_stop'] is True
+    assert status['raw_answer'] == 'Yes, a puddle.'
+    assert 'puddle' in status['reason']
+    assert status['latency_ms'] >= 0 and status['model_loaded'] is True
+
+
+def test_diagnostics_levels(ros):
+    from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus
+
+    h = ros(BrokenEngine())
+    diags = collect(h, DiagnosticArray, '/diagnostics')
+    assert wait_for(lambda: diags, timeout=3.0)
+    assert diags[-1].status[0].level == DiagnosticStatus.ERROR
+    assert diags[-1].status[0].message == 'VLM failed to load'
+
+    ok = ros(VLMEngine(model=ScriptedModel('no')))
+    ok_diags = collect(ok, DiagnosticArray, '/diagnostics')
+    deadline = time.time() + 3.0
+    while time.time() < deadline:
+        ok.pub.publish(FRAME)
+        if any(d.status[0].message == 'Monitoring' for d in ok_diags):
+            break
+        time.sleep(0.05)
+    assert any(d.status[0].level == DiagnosticStatus.OK for d in ok_diags)

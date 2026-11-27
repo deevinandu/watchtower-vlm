@@ -52,6 +52,20 @@ ros2 service call /watchtower_vlm/reset std_srvs/srv/Trigger
 
 A reset is refused while the VLM is unavailable. If the camera is still silent, the watchdog re-asserts the stop within 0.25 s.
 
+### Monitoring
+
+- `/watchtower_vlm/status` (`std_msgs/String`, JSON): published after every decision and every trip. It carries `e_stop`, `reason`, `prompt`, `raw_answer`, `confidence`, `vote_mean`, `latency_ms`, `inference_hz`, `camera_age_s`, `model_loaded`, `model_failed` and `dropped_frames`.
+- `/diagnostics` (`diagnostic_msgs/DiagnosticArray`, 1 Hz):
+  - ERROR when the VLM failed to load or the camera is silent;
+  - WARN while the model is loading or the E-Stop is active (the message gives the reason);
+  - otherwise OK.
+
+  View it with `ros2 run rqt_runtime_monitor rqt_runtime_monitor`.
+
+```bash
+ros2 topic echo /watchtower_vlm/status --field data
+```
+
 Defaults live in `config/watchtower.yaml`; pass `config:=/path/to.yaml` to replace it.
 
 ## Test

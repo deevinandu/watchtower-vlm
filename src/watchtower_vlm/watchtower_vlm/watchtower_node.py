@@ -1,11 +1,13 @@
 """Watchtower VLM ROS 2 node: camera frames in, E-Stop out."""
 
 from collections import deque
+import json
 import queue
 import threading
 import time
 
 from cv_bridge import CvBridge, CvBridgeError
+from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus, KeyValue
 from PIL import Image as PILImage
 from rcl_interfaces.msg import ParameterDescriptor, SetParametersResult
 import rclpy
@@ -14,7 +16,7 @@ from rclpy.executors import ExternalShutdownException, MultiThreadedExecutor
 from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
 from sensor_msgs.msg import Image
-from std_msgs.msg import Bool
+from std_msgs.msg import Bool, String
 from std_srvs.srv import Trigger
 
 from watchtower_vlm.frame_queue import LatestFrameQueue
@@ -69,6 +71,13 @@ class WatchtowerNode(Node):
         self._latch = EStopLatch(max(1, self.get_parameter('clear_frames').value))
         self._state_lock = threading.Lock()
         self._last_frame_time = time.monotonic()
+        self._trip_reason = None
+        self._last_answer = None
+        self._last_confidence = None
+        self._vote_mean = None
+        self._latency_ms = None
+        self._last_decision_time = None
+        self._inference_hz = 0.0
 
         self._engine = engine or VLMEngine(
             model_path=self.get_parameter('model_path').value,
@@ -83,11 +92,15 @@ class WatchtowerNode(Node):
         self._cb_group = ReentrantCallbackGroup()
 
         self._e_stop_pub = self.create_publisher(Bool, e_stop_topic, 10)
+        self._status_pub = self.create_publisher(String, '~/status', 10)
+        self._diag_pub = self.create_publisher(DiagnosticArray, '/diagnostics', 10)
         self._image_sub = self.create_subscription(
             Image, image_topic, self._image_callback, qos_profile_sensor_data,
             callback_group=self._cb_group)
         self._reset_srv = self.create_service(
             Trigger, '~/reset', self._reset_callback, callback_group=self._cb_group)
+        self._diag_timer = self.create_timer(
+            1.0, self._diagnostics_callback, callback_group=self._cb_group)
         self._watchdog = self.create_timer(
             0.25, self._watchdog_callback, callback_group=self._cb_group)
         self.add_on_set_parameters_callback(self._on_set_parameters)
@@ -138,9 +151,11 @@ class WatchtowerNode(Node):
             return response
         with self._state_lock:
             self._latch.reset()
+            self._trip_reason = None
             self._votes.clear()
         self._e_stop_pub.publish(Bool(data=False))
         self.get_logger().warning('E-Stop manually reset via ~/reset')
+        self._publish_status()
         response.success = True
         response.message = 'E-Stop released'
         return response
@@ -183,19 +198,24 @@ class WatchtowerNode(Node):
 
         prompt = self.get_parameter('prompt').value
         try:
+            started = time.monotonic()
             result = self._engine.evaluate(PILImage.fromarray(frame), prompt)
+            self._latency_ms = (time.monotonic() - started) * 1000.0
         except Exception as exc:  # noqa: BLE001 - keep the safety loop alive
             self._handle_failure(f'Inference failed: {exc}')
             return
 
         self.get_logger().debug(
             f'VLM answer "{result.raw_answer}" -> confidence {result.confidence:.2f}')
+        self._last_answer = result.raw_answer.strip()
+        self._last_confidence = result.confidence
         self._decide(self._vote(result.confidence))
 
     def _vote(self, confidence: float) -> bool:
         self._votes.append(confidence)
         threshold = self.get_parameter('confidence_threshold').value
-        return sum(self._votes) / len(self._votes) >= threshold
+        self._vote_mean = sum(self._votes) / len(self._votes)
+        return self._vote_mean >= threshold
 
     def _handle_failure(self, reason: str):
         fail_safe = self.get_parameter('fail_safe').value
@@ -210,7 +230,18 @@ class WatchtowerNode(Node):
         with self._state_lock:
             was_active = self._latch.active
             active = self._latch.update(anomaly)
+            if anomaly:
+                self._trip_reason = f'Anomaly detected: "{self._last_answer}"'
+            elif not active:
+                self._trip_reason = None
         self._e_stop_pub.publish(Bool(data=active))
+        now = time.monotonic()
+        if self._last_decision_time is not None:
+            rate = 1.0 / max(now - self._last_decision_time, 1e-6)
+            self._inference_hz = rate if not self._inference_hz else (
+                0.8 * self._inference_hz + 0.2 * rate)
+        self._last_decision_time = now
+        self._publish_status()
         if active and not was_active:
             self.get_logger().warning('E-Stop asserted: anomaly detected')
         elif was_active and not active:
@@ -221,9 +252,56 @@ class WatchtowerNode(Node):
         with self._state_lock:
             was_active = self._latch.active
             self._latch.trip()
+            self._trip_reason = reason
         self._e_stop_pub.publish(Bool(data=True))
         if not was_active:
             self.get_logger().warning(f'E-Stop asserted: {reason}')
+            self._publish_status()
+
+    def _status(self) -> dict:
+        def rounded(value, digits):
+            return None if value is None else round(value, digits)
+
+        return {
+            'e_stop': self._latch.active,
+            'reason': self._trip_reason,
+            'prompt': self.get_parameter('prompt').value,
+            'raw_answer': self._last_answer,
+            'confidence': self._last_confidence,
+            'vote_mean': rounded(self._vote_mean, 3),
+            'latency_ms': rounded(self._latency_ms, 1),
+            'inference_hz': round(self._inference_hz, 2),
+            'camera_age_s': round(time.monotonic() - self._last_frame_time, 2),
+            'model_loaded': self._engine.loaded,
+            'model_failed': self._engine_failed,
+            'dropped_frames': self._frames.dropped,
+        }
+
+    def _publish_status(self):
+        self._status_pub.publish(String(data=json.dumps(self._status())))
+
+    def _diagnostics_callback(self):
+        status = self._status()
+        timeout = self.get_parameter('frame_timeout_sec').value
+        camera_stale = timeout > 0 and status['camera_age_s'] > timeout
+        if status['model_failed']:
+            level, message = DiagnosticStatus.ERROR, 'VLM failed to load'
+        elif camera_stale:
+            level, message = DiagnosticStatus.ERROR, 'Camera silent'
+        elif not status['model_loaded']:
+            level, message = DiagnosticStatus.WARN, 'Loading VLM'
+        elif status['e_stop']:
+            level, message = DiagnosticStatus.WARN, f'E-Stop active: {status["reason"]}'
+        else:
+            level, message = DiagnosticStatus.OK, 'Monitoring'
+
+        diag = DiagnosticStatus(
+            level=level, name=f'{self.get_name()}: semantic safety', message=message,
+            hardware_id=self._engine.model_path,
+            values=[KeyValue(key=k, value=str(v)) for k, v in status.items()])
+        array = DiagnosticArray(status=[diag])
+        array.header.stamp = self.get_clock().now().to_msg()
+        self._diag_pub.publish(array)
 
     def destroy_node(self):
         self._stop_event.set()
